@@ -1,6 +1,10 @@
 # dataset settings
 dataset_type = 'DOTADataset'
+# Please ensure that the directory specified by ann_file = data_root + 'trainval/annfiles/' exists and contains the annotation files.
+# Otherwise, the model will only save checkpoints and skip the training process due to a lack of training data.
 data_root = 'data/dotav1_ss1024/'
+
+
 
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
@@ -33,12 +37,12 @@ data = dict(
     workers_per_gpu=4,
     train=dict(
         type=dataset_type,
-        ann_file=data_root + 'trainval/annfiles_v1/',
+        ann_file=data_root + 'trainval/annfiles/',
         img_prefix=data_root + 'trainval/images/',
         pipeline=train_pipeline),
     val=dict(
         type=dataset_type,
-        ann_file=data_root + 'val/annfiles_v1/',
+        ann_file=data_root + 'val/annfiles/',
         img_prefix=data_root + 'val/images/',
         pipeline=test_pipeline),
     test=dict(
@@ -46,3 +50,21 @@ data = dict(
         ann_file=data_root + 'test/images/',
         img_prefix=data_root + 'test/images/',
         pipeline=test_pipeline))
+# data = dict(
+#     samples_per_gpu=2,
+#     workers_per_gpu=4,
+#     train=dict(
+#         type=dataset_type,
+#         ann_file=data_root + 'trainval/annfiles_v1/',
+#         img_prefix=data_root + 'trainval/images/',
+#         pipeline=train_pipeline),
+#     val=dict(
+#         type=dataset_type,
+#         ann_file=data_root + 'val/annfiles_v1/',
+#         img_prefix=data_root + 'val/images/',
+#         pipeline=test_pipeline),
+#     test=dict(
+#         type=dataset_type,
+#         ann_file=data_root + 'test/images/',
+#         img_prefix=data_root + 'test/images/',
+#         pipeline=test_pipeline))
