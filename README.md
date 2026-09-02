@@ -14,7 +14,7 @@ The configuration files under configs/ASMNet can be added to the configs/ direct
 
 To train the model, use:
 
-CUDA_VISIBLE_DEVICES=6,7 PORT=29504 bash ./tools/dist_train.sh configs/ASMNet/ASMNet_S_fpn_o-rcnn-dotav1-ss_le90_30e.py 2
+CUDA_VISIBLE_DEVICES=6,7   PORT=29504   bash  ./tools/dist_train.sh   configs/ASMNet/ASMNet_S_fpn_o-rcnn-dotav1-ss_le90_30e.py  2
 
 Adjust the paths to dist_train.sh and the config file (e.g. ASMNet_S_fpn_o-rcnn-dotav1-ss_le90_30e.py) as needed.
 
