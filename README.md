@@ -20,6 +20,8 @@ Adjust the paths to dist_train.sh and the config file (e.g. ASMNet_S_fpn_o-rcnn-
 
 
 ### Test and Submit the result to [DOTA-v1.0 server](http://bed4rs.net:8001/login/?next=/evaluation1/)
+To test the model, use:
+
 CUDA_VISIBLE_DEVICES=7  PORT=29503 ./dist_test.sh  configs/ASMNet/ASMNet_S_fpn_o-rcnn-dotav1-ss_le90_30e.py \
  tools/work_dirs/ASMNet_S_fpn_o-rcnn-dotav1-ss_le90_30e/epoch_30.pth 1 --format-only \
  --eval-options submission_dir=tools/work_dirs/ASMNet_S_fpn_o-rcnn-dotav1-ss_le90_30e/Task1_results_ss_ASMNet_S_fpn_o-rcnn-dotav1-ss_epoch30
