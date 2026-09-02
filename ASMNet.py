@@ -9,7 +9,6 @@ from mmrotate.models.builder import ROTATED_BACKBONES
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.models.layers import DropPath
 from timm.models.registry import register_model
-# from mmdet.utils import get_root_logger
 from mmrotate.utils import get_root_logger
 from mmcv.runner import _load_checkpoint
 
@@ -27,7 +26,7 @@ def _cfg(url='', **kwargs):
 
 
 default_cfgs = {
-    'ASMNet': _cfg(crop_pct=0.9, mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD)
+    'ADRNet': _cfg(crop_pct=0.9, mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD)
 }
 
 
@@ -156,6 +155,9 @@ class LiteAxisRCMContrast(nn.Module):
 
         hidden_channels = max(8, in_channels // reduction)
 
+        # Axis-aware target map:
+        # Height branch:  X -> mean over W -> B,C,H,1 -> A^h
+        # Width branch:   X -> mean over H -> B,C,1,W -> A^w
         self.axis_target = nn.Sequential(
             nn.Conv2d(in_channels, hidden_channels, kernel_size=1, bias=False),
             nn.BatchNorm2d(hidden_channels),
@@ -216,7 +218,6 @@ class LiteAxisRCMContrast(nn.Module):
         """
         axis_desc = self._axis_pool(x)
         axis_att = self.axis_target(axis_desc)
-
         modulated_diffs = []
         relation_descs = []
 
@@ -226,12 +227,10 @@ class LiteAxisRCMContrast(nn.Module):
             diff_t = diff * axis_att
             modulated_diffs.append(diff_t)
             relation_descs.append(self._axis_pool(diff_t))
-
         relation_desc = torch.cat(relation_descs, dim=1)
         logits = self.offset_selector(relation_desc)
         alpha = F.softmax(logits, dim=1)
         x_sparse = 0.0
-
         for idx, diff_t in enumerate(modulated_diffs):
             weight = alpha[:, idx:idx + 1, :, :]
             x_sparse = x_sparse + weight * diff_t
@@ -241,7 +240,7 @@ class LiteAxisRCMContrast(nn.Module):
         return out
 
 
-class ASM_Height(LiteAxisRCMContrast):
+class ADR_Height(LiteAxisRCMContrast):
     def __init__(
         self,
         in_channels,
@@ -260,7 +259,7 @@ class ASM_Height(LiteAxisRCMContrast):
         )
 
 
-class ASM_Width(LiteAxisRCMContrast):
+class ADR_Width(LiteAxisRCMContrast):
     def __init__(
         self,
         in_channels,
@@ -279,24 +278,24 @@ class ASM_Width(LiteAxisRCMContrast):
         )
 
 
-class ASM(nn.Module):
+class ADR(nn.Module):
     """
-    ASM module
+    ADR module
     """
     def __init__(self, in_channels, drop_path=0.0, K=2):
-        super(ASM, self).__init__()
+        super(ADR, self).__init__()
         self.channels = in_channels
         self.K = K
         self.fc1 = nn.Sequential(
             nn.Conv2d(in_channels, in_channels, 1, stride=1, padding=0),
             nn.BatchNorm2d(in_channels),
         )
-        self.graph_conv_h = ASM_Height(in_channels, in_channels * 2, K=self.K)
+        self.graph_conv_h = ADR_Height(in_channels, in_channels * 2, K=self.K)
         self.fc2 = nn.Sequential(
             nn.Conv2d(in_channels * 2, in_channels, 1, stride=1, padding=0),
             nn.BatchNorm2d(in_channels),
         )  
-        self.graph_conv_w = ASM_Width(in_channels, in_channels * 2, K=self.K)
+        self.graph_conv_w = ADR_Width(in_channels, in_channels * 2, K=self.K)
         self.fc3 = nn.Sequential(
             nn.Conv2d(in_channels * 2, in_channels, 1, stride=1, padding=0),
             nn.BatchNorm2d(in_channels),
@@ -354,7 +353,7 @@ class FFN(nn.Module):
         return x
 
 
-class ASMNet(torch.nn.Module):
+class ADRNet(torch.nn.Module):
     def __init__(self, local_blocks, local_channels,
                  global_blocks, global_channels,
                  dropout=0., drop_path=0., emb_dims=512,
@@ -362,7 +361,7 @@ class ASMNet(torch.nn.Module):
                  pretrained=None, 
                  
                  out_indices=None):
-        super(ASMNet, self).__init__()
+        super(ADRNet, self).__init__()
 
         self.distillation = distillation
         self.out_indices = out_indices
@@ -387,7 +386,7 @@ class ASMNet(torch.nn.Module):
                 self.backbone.append(Downsample(global_channels[i-1], global_channels[i]))
             for j in range(global_blocks[i]):
                 self.backbone += [nn.Sequential(
-                                    ASM(global_channels[i], drop_path=dpr[dpr_idx], K=K),
+                                    ADR(global_channels[i], drop_path=dpr[dpr_idx], K=K),
                                     FFN(global_channels[i], global_channels[i] * 4, drop_path=dpr[dpr_idx]),
                                     )
                                     ]
@@ -396,7 +395,6 @@ class ASMNet(torch.nn.Module):
         self.init_weights()
         self = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self)
         
-
     def init_weights(self):
         logger = get_root_logger()
         if  self.pretrained is None:
@@ -449,11 +447,14 @@ class ASMNet(torch.nn.Module):
     def forward(self, inputs):
         x = self.stem(inputs)
         outs = []
+
         for i in range(len(self.local_backbone)):
             x = self.local_backbone[i](x)
             if i in self.out_indices:
                 outs.append(x)
+
         offset = len(self.local_backbone)
+
         for i in range(len(self.backbone)):
             x = self.backbone[i](x)
             idx = i + offset
@@ -463,10 +464,9 @@ class ASMNet(torch.nn.Module):
         return outs
 
 
-
 @ROTATED_BACKBONES.register_module()
 def ASMNet_T_ESWA(pretrained=False, **kwargs):
-    model = ASMNet(local_blocks=[3, 3, 9],
+    model = ADRNet(local_blocks=[3, 3, 9],
                       local_channels=[42, 84, 176],
                       global_blocks=[3],
                       global_channels=[256],
@@ -477,14 +477,14 @@ def ASMNet_T_ESWA(pretrained=False, **kwargs):
                       distillation=False,
                       num_classes=1000,
                       out_indices=[2, 6, 16, 20],
-                    pretrained=None,
+                    pretrained='ASMNet_T_ESWA_pretrained.pth'
                       )
-    model.default_cfg = default_cfgs['ASMNet']
+    model.default_cfg = default_cfgs['ADRNet']
     return model
 
 @ROTATED_BACKBONES.register_module()
 def ASMNet_T_ESWA_NoNaN(pretrained=False, **kwargs):
-    model = ASMNet(local_blocks=[3, 3, 9],
+    model = ADRNet(local_blocks=[3, 3, 9],
                       local_channels=[42, 84, 176],
                       global_blocks=[2],
                       global_channels=[256],
@@ -495,15 +495,15 @@ def ASMNet_T_ESWA_NoNaN(pretrained=False, **kwargs):
                       distillation=False,
                       num_classes=1000,
                       out_indices=[2, 6, 16, 19],
-                    pretrained=None,
+                    pretrained='ASMNet_T_ESWA_NoNaN_pretrained.pth'
                       )
-    model.default_cfg = default_cfgs['ASMNet']
+    model.default_cfg = default_cfgs['ADRNet']
     return model
 
 
 @ROTATED_BACKBONES.register_module()
 def ASMNet_S_ESWA(pretrained=False, **kwargs):
-    model = ASMNet(local_blocks=[2, 2, 4],
+    model = ADRNet(local_blocks=[2, 2, 4],
                     local_channels=[64, 128, 320],
                     global_blocks=[2],
                     global_channels=[512],
@@ -514,7 +514,7 @@ def ASMNet_S_ESWA(pretrained=False, **kwargs):
                     distillation=False,
                     num_classes=1000,
                     out_indices=[1, 4, 9, 12],
-                    pretrained=None,
+                    pretrained='ASMNet_S_ESWA_pretrained.pth'
                     )
-    model.default_cfg = default_cfgs['ASMNet']
+    model.default_cfg = default_cfgs['ADRNet']
     return model
