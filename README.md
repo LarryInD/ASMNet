@@ -14,7 +14,14 @@ The configuration files under configs/ASMNet can be added to the configs/ direct
 
 To train the model, use:
 
-CUDA_VISIBLE_DEVICES=6,7   PORT=29504   bash  ./tools/dist_train.sh   configs/ASMNet/ASMNet_S_fpn_o-rcnn-dotav1-ss_le90_30e.py  2
+CUDA_VISIBLE_DEVICES=6,7   PORT=29503   bash  ./tools/dist_train.sh   configs/ASMNet/ASMNet_S_fpn_o-rcnn-dotav1-ss_le90_30e.py  2
 
-Adjust the paths to dist_train.sh and the config file (e.g. ASMNet_S_fpn_o-rcnn-dotav1-ss_le90_30e.py) as needed.
+Adjust the paths to dist_train.sh and the config file (e.g. ASMNet_S_fpn_o-rcnn-dotav1-ss_le90_30e.py) as needed. Absolute paths are also perfectly fine if you prefer.
 
+
+### Test and Submit the result to [DOTA-v1.0 server](http://bed4rs.net:8001/login/?next=/evaluation1/)
+CUDA_VISIBLE_DEVICES=7  PORT=29503 ./dist_test.sh  configs/ASMNet/ASMNet_S_fpn_o-rcnn-dotav1-ss_le90_30e.py \
+ tools/work_dirs/ASMNet_S_fpn_o-rcnn-dotav1-ss_le90_30e/epoch_30.pth 1 --format-only \
+ --eval-options submission_dir=tools/work_dirs/ASMNet_S_fpn_o-rcnn-dotav1-ss_le90_30e/Task1_results_ss_ASMNet_S_fpn_o-rcnn-dotav1-ss_epoch30
+
+Please adjust the paths to dist_test.sh, the config file (e.g., ASMNet_S_fpn_o-rcnn-dotav1-ss_le90_30e.py), the checkpoint path (work_dirs/ASMNet_S_fpn_o-rcnn-dotav1-ss_le90_30e/epoch_30.pth), and the output directory (work_dirs/ASMNet_S_fpn_o-rcnn-dotav1-ss_le90_30e/) as needed. Absolute paths are also perfectly fine if you prefer.
